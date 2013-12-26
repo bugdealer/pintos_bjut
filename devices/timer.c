@@ -1,10 +1,12 @@
-#include "devices/timer.h"
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
+#include "devices/timer.h"
+#include "devices/pit.h"
 #include "threads/interrupt.h"
 #include "threads/io.h"
+#include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
   
@@ -30,20 +32,12 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
-/* Sets up the 8254 Programmable Interval Timer (PIT) to
-   interrupt PIT_FREQ times per second, and registers the
-   corresponding interrupt. */
+/* Sets up the timer to interrupt TIMER_FREQ times per second,
+   and registers the corresponding interrupt. */
 void
 timer_init (void) 
 {
-  /* 8254 input frequency divided by TIMER_FREQ, rounded to
-     nearest. */
-  uint16_t count = (1193180 + TIMER_FREQ / 2) / TIMER_FREQ;
-
-  outb (0x43, 0x34);    /* CW: counter 0, LSB then MSB, mode 2, binary. */
-  outb (0x40, count & 0xff);
-  outb (0x40, count >> 8);
-
+  pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
 
@@ -81,7 +75,6 @@ timer_ticks (void)
   enum intr_level old_level = intr_disable ();
   int64_t t = ticks;
   intr_set_level (old_level);
-  barrier ();
   return t;
 }
 
@@ -95,37 +88,21 @@ timer_elapsed (int64_t then)
 
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
-
-
-static void block_check(struct thread* t,void *aux UNUSED) //####################################################
- {
-   if(t->remain_ticks>0)
-    {
-     t->remain_ticks--;
-     if(t->remain_ticks==0)
-     thread_unblock(t);
-     
-     }
-}
 void
 timer_sleep (int64_t ticks) 
 {
-  //int64_t start = timer_ticks ();
+  /*
+  int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
-  /* while (timer_elapsed (start) < ticks) 
-    thread_yield (); */
-if(ticks>0)
-{
- enum intr_level old_level = intr_disable ();
+  while (timer_elapsed (start) < ticks) 
+    thread_yield ();
+  */
+  ASSERT (intr_get_level () == INTR_ON);
 
-  struct thread *cur=thread_current();
-  cur->remain_ticks=ticks;
-  thread_block();
-
-  intr_set_level (old_level);
-}
-  
+  /******************* PROJECT 1 *******************/
+  thread_sleep(ticks);  
+  /******************* PROJECT 1 *******************/
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -200,14 +177,14 @@ timer_print_stats (void)
 
 /* Timer interrupt handler. */
 static void
-timer_interrupt (struct intr_frame *args UNUSED)//########################################
-{ 
-  enum intr_level old_level = intr_disable ();
-  
+timer_interrupt (struct intr_frame *args UNUSED)
+{
   ticks++;
-  thread_foreach(&block_check,0);
-  intr_set_level (old_level);
- thread_tick ();
+  /******************* PROJECT 1 *******************/
+  check_wakeup();
+  /******************* PROJECT 1 *******************/
+  thread_tick ();
+  
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

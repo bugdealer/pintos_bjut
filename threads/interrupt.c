@@ -6,6 +6,7 @@
 #include "threads/flags.h"
 #include "threads/intr-stubs.h"
 #include "threads/io.h"
+#include "devices/pit.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "devices/timer.h"

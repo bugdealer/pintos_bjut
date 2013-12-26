@@ -4,7 +4,16 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+/* Nice value boundary */
+#define NICE_MIN -20
+#define NICE_DEFAULT 0
+#define NICE_MAX 20
+/* recent_cpu in the begining */
+#define RECENT_CPU_BEGIN 0
 
+/******************* PROJECT 2 *******************/
+#include "threads/synch.h"  
+/******************* PROJECT 2 *******************/
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -24,6 +33,11 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+#ifdef USERPROG
+/******************* PROJECT 2 *******************/
+# define RET_STATUS_DEFAULT 0xcdcdcdcd
+/******************* PROJECT 2 *******************/
+#endif
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -87,17 +101,38 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
-    int64_t ready_ticks; //##############################################################
-    int64_t remain_ticks;
+    int priority;                       /* Priority. 有效优先级 */
+    
+     /******************* PROJECT 1 *******************/
+    int base_priority; /* old priority */
+    int64_t wakeup_tick;  /* how long the thread sleep */
+    int32_t nice;        
+    int64_t recent_cpu;  
+    struct list locks;      /* locks holden by thread */
+    bool donated;             /* whether the thread's priority is donated */
+    struct lock *blocked;   /* the lock causes thread to be blocked */
+     /******************* PROJECT 1 *******************/
+     
+	/******************* PROJECT 2 *******************/
+    
+    struct semaphore wait;              /* semaphore for process_wait */
+    int return_status;                     /* return status */
+    struct list files;                  /* all opened files */
+    struct file *self;                  /* the image file on the disk */
+    struct thread *parent;              /* parent process */
+    
+	
+	/******************* PROJECT 2 *******************/
+	
     struct list_elem allelem;           /* List element for all threads list. */
+    
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+
 #endif
 
     /* Owned by thread.c. */
@@ -128,10 +163,11 @@ const char *thread_name (void);
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
+
+
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
-void thread_foreachblock (thread_action_func *, void *);//###############################################
 
 int thread_get_priority (void);
 void thread_set_priority (int);
@@ -140,5 +176,30 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+int thread_get_load_avg (void);
+int thread_get_recent_cpu (void);
+
+/******************* PROJECT 1 *******************/
+void thread_yield_equ (void);  /*与void thread_yield (void) 稍有区别，就是等号*/
+void thread_set_priority_other (struct thread *curr, int new_priority); /*改*/
+void check_wakeup(void);  /* 在timer.c中，用于检测有没有线程该被唤醒 */
+void thread_sleep(int64_t ticks); /* 在timer.c中，用于克服忙等待，让线程睡眠 */
+bool wakeup_tick_less (const struct list_elem *a,const struct list_elem *b,void *aux UNUSED); /* 在timer.c中比较线程睡眠的时间 */
+bool priority_higher_equ (const struct list_elem *a,const struct list_elem *b,void *aux UNUSED); /* 比较优先级--稍有不同，就是等号*/
+bool priority_more (const struct list_elem *a, const struct list_elem *b,void *aux UNUSED);
+
+void thread_calculate_advanced_priority (void);
+void calculate_advanced_priority_for_all (void);
+void calculate_advanced_priority (struct thread *, void *aux);
+void thread_calculate_recent_cpu (void);
+void calculate_recent_cpu_for_all (void);
+void calculate_recent_cpu (struct thread *, void *aux);
+void calculate_load_avg (void);
+/******************* PROJECT 1 *******************/
+
+/******************* PROJECT 2 *******************/
+struct thread *get_thread_by_tid (tid_t);
+/******************* PROJECT 2 *******************/
+
 
 #endif /* threads/thread.h */
