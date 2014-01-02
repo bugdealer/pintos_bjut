@@ -26,11 +26,12 @@
    MODIFICATIONS.
 */
 
-#include "threads/synch.h"
+#include "../threads/synch.h"
 #include <stdio.h>
 #include <string.h>
-#include "threads/interrupt.h"
-#include "threads/thread.h"
+#include "../threads/interrupt.h"
+#include "../threads/thread.h"
+#include "../lib/kernel/list.h"
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -68,7 +69,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+		list_insert_ordered(&sema->waiters, &thread_current ()->elem,thread_priority_func,NULL);
       thread_block ();
     }
   sema->value--;
@@ -113,10 +114,11 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
   sema->value++;
+  if (!list_empty (&sema->waiters)) 
+   
+  thread_unblock (list_entry (list_pop_front (&sema->waiters),struct thread, elem));
+  
   intr_set_level (old_level);
 }
 
@@ -195,9 +197,26 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-
+    struct thread *cur=thread_current();
+  enum intr_level old_level = intr_disable ();
+ 
+   if(!thread_mlfqs)
+  {
+   
+    if (lock->holder != NULL) {
+	
+    cur->blocked_for_lock = lock;
+	if(cur->blocked_for_lock ==NULL)
+		printf("fail to set blocked_for_lock");
+		
+    add_thread_donation(lock,cur);
+	 }
+   }
+    intr_set_level (old_level);
+ 
   sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
+  lock->holder = cur;
+  //cur->blocked_for_lock=NULL;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -230,9 +249,10 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
-
+  rm_thread_donation(lock,lock->holder);
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+  
 }
 
 /* Returns true if the current thread holds LOCK, false

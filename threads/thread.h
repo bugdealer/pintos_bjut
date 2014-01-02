@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -88,12 +89,14 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int64_t ready_ticks; //##############################################################
-    int64_t remain_ticks;
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
-    struct list_elem elem;              /* List element. */
+    struct list_elem elem;              /* List element. */	
+	int64_t sleep_to_ticks;
+	struct lock blocked_for_lock;
+	struct list rec_donations;
+	
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -103,6 +106,14 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+  struct donation_elem
+{
+  struct thread *donor;
+  struct lock *lock; // Lock that t_donor is waiting on, either directly or indirectly via nested donation.
+  struct list_elem elem;
+  int priority;
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -131,7 +142,6 @@ void thread_yield (void);
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
-void thread_foreachblock (thread_action_func *, void *);//###############################################
 
 int thread_get_priority (void);
 void thread_set_priority (int);
@@ -141,4 +151,15 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+void thread_sleep(int64_t );
+bool wakeup_tick_late (const struct list_elem *,const struct list_elem *,void * UNUSED);
+void sleep_wakeup(void);
+bool thread_priority_func(const struct list_elem *, const struct list_elem *,void * UNUSED);
+bool 
+thread_donation_priority_less_func (const struct list_elem *, const struct list_elem *, void * UNUSED);
+int thread_get_priority_for_thread(struct thread* );
+void thread_yield_all_priority(void);
+void thread_reinsert_list(struct thread *, struct list *);
+void add_thread_donation(struct lock *,struct thread*);
+void rm_thread_donation(struct lock*,struct thread *);
 #endif /* threads/thread.h */
