@@ -1,12 +1,13 @@
-#include "../devices/timer.h"
+#include "devices/timer.h"
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
-#include "../threads/interrupt.h"
-#include "../threads/io.h"
-#include "../threads/synch.h"
-#include "../threads/thread.h"
+#include "threads/interrupt.h"
+#include "threads/io.h"
+#include "threads/synch.h"
+#include "threads/thread.h"
+#include "threads/fixed-point.h"
   
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -16,6 +17,8 @@
 #if TIMER_FREQ > 1000
 #error TIMER_FREQ <= 1000 recommended
 #endif
+
+#define PRIORITY_TICK_UPDATE 4
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
@@ -38,12 +41,11 @@ timer_init (void)
 {
   /* 8254 input frequency divided by TIMER_FREQ, rounded to
      nearest. */
-  uint16_t count = (1193180 + TIMER_FREQ / 2) / TIMER_FREQ;
+uint16_t count = (1193180 + TIMER_FREQ / 2) / TIMER_FREQ;
 
-  outb (0x43, 0x34);    /* CW: counter 0, LSB then MSB, mode 2, binary. */
+  outb (0x43, 0x34);    // CW: counter 0, LSB then MSB, mode 2, binary
   outb (0x40, count & 0xff);
   outb (0x40, count >> 8);
-
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
 
@@ -95,13 +97,15 @@ timer_elapsed (int64_t then)
 
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
+//##########################################
+//调用thread_sleep(),实现等待队列等待
 void
-timer_sleep (int64_t ticks) 
+timer_sleep (int64_t ticks) 	
 {
   ASSERT (intr_get_level () == INTR_ON);
   thread_sleep(ticks);
 }
-
+//###########################################
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
    turned on. */
 void
@@ -174,13 +178,17 @@ timer_print_stats (void)
 
 /* Timer interrupt handler. */
 static void
-timer_interrupt (struct intr_frame *args UNUSED)
+	//######################################
+	//在每个时钟中断的时候调用wakeup,唤醒程序
+timer_interrupt (struct intr_frame *args UNUSED)	  
 {
   
    ticks++ ;
+
    sleep_wakeup();
    thread_tick ();
 }
+//#######################################
 
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */

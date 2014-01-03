@@ -67,7 +67,7 @@ sema_down (struct semaphore *sema)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  while (sema->value <= 0) 
+  while (sema->value == 0) 
     {
 		list_insert_ordered(&sema->waiters, &thread_current ()->elem,thread_priority_func,NULL);
       thread_block ();
@@ -106,8 +106,10 @@ sema_try_down (struct semaphore *sema)
    and wakes up one thread of those waiting for SEMA, if any.
 
    This function may be called from an interrupt handler. */
+//#####################################
+//修改启动规则,使其能按优先级启动
 void
-sema_up (struct semaphore *sema) 
+sema_up (struct semaphore *sema) 	  
 {
   enum intr_level old_level;
 
@@ -127,7 +129,7 @@ sema_up (struct semaphore *sema)
   }
   intr_set_level (old_level);
 }
-
+//#####################################
 static void sema_test_helper (void *sema_);
 
 /* Self-test for semaphores that makes control "ping-pong"
@@ -197,8 +199,10 @@ lock_init (struct lock *lock)
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
+//###########################################
+//在要求锁的时候发现需要捐赠则开启捐赠过程,thread_mlfqs不做捐赠过程
 void
-lock_acquire (struct lock *lock)
+lock_acquire (struct lock *lock)	  
 {
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
@@ -209,22 +213,18 @@ lock_acquire (struct lock *lock)
    if(!thread_mlfqs)
   {
    
-    if (lock->holder != NULL) {
-	
-    cur->blocked_for_lock = lock;
-	if(cur->blocked_for_lock ==NULL)
-		printf("fail to set blocked_for_lock");
-		
-    add_thread_donation(lock,cur);
+    if (lock->holder != NULL)
+	{
+       cur->blocked_for_lock = lock; 
+       add_thread_donation(lock,cur);
 	 }
    }
     intr_set_level (old_level);
- 
   sema_down (&lock->semaphore);
   lock->holder = cur;
-  //cur->blocked_for_lock=NULL;
-}
 
+}
+//###########################################
 /* Tries to acquires LOCK and returns true if successful or false
    on failure.  The lock must not already be held by the current
    thread.
@@ -250,16 +250,24 @@ lock_try_acquire (struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
+//######################################	
+//释放锁,移除捐赠列表(不在mlfqs中做)
 void
-lock_release (struct lock *lock) 
+lock_release (struct lock *lock) 		
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+  if(!thread_mlfqs)
+  {
+  enum intr_level old_level = intr_disable ();	
   rm_thread_donation(lock,lock->holder);
+  intr_set_level (old_level);
+  }
   lock->holder = NULL;
   sema_up (&lock->semaphore);
   
 }
+ //######################################
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
